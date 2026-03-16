@@ -723,6 +723,20 @@ body.neon .btn:not(.btn-outline){color:#001a12;}
         </div>
       </div>
       <div class="panel">
+        <div class="panel-header"><span class="panel-title">&#8599; Balanci i Mbartur</span></div>
+        <div class="panel-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <div>
+              <div style="font-size:13px;font-weight:500;" id="carryDeficitLabel">Barto edhe deficitin</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;" id="carryDeficitDesc">Nëse muaji i kaluar ka minus, shfaqet si borxh në muajin e ri</div>
+            </div>
+            <button id="carryDeficitToggle" onclick="toggleCarryDeficit()" style="width:42px;height:22px;border-radius:11px;border:none;cursor:pointer;position:relative;transition:background 0.2s;flex-shrink:0;">
+              <span style="position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:3px;transition:left 0.2s;"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
         <div class="panel-header"><span class="panel-title" data-i18n="settingsData">Të dhënat</span></div>
         <div class="panel-body" style="display:flex;flex-direction:column;gap:8px;">
           <button class="btn btn-outline btn-full" onclick="exportCSV()" data-i18n-html="exportCSV">&#8681; Eksport CSV</button>
@@ -1696,7 +1710,10 @@ function getPrevMonthCarryOver(){
     const ptxs=pd.transactions||[],ps=pd.salary||0;
     const pi=ptxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0)+ps;
     const pe=ptxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-    return Math.max(0,pi-pe);
+    const balance=pi-pe;
+    // If deficit carry-over is enabled, return actual balance (can be negative)
+    const carryDeficit=localStorage.getItem('fm_carrydeficit')==='1';
+    return carryDeficit?balance:Math.max(0,balance);
   }catch{return 0;}
 }
 
@@ -1717,10 +1734,17 @@ function render(){
   // Carry-over display
   const cel=document.getElementById('carryOverDisplay');
   if(cel){
-    if(carryOver>0){
+    if(carryOver!==0){
       cel.style.display='flex';
       const prevM=CM-1<0?11:CM-1;
-      cel.innerHTML=`<span style="font-size:11px;color:var(--accent);">&#8599; ${t('carryOver')||'Bartur nga'} ${MONTHS[prevM]}: <strong style="font-family:DM Mono,monospace;">+${fmt(carryOver)}</strong></span>`;
+      const isNeg=carryOver<0;
+      const color=isNeg?'var(--red)':'var(--accent)';
+      const bg=isNeg?'var(--red-dim)':'var(--accent-dim)';
+      cel.style.background=bg;
+      const arrow=isNeg?'&#8600;':'&#8599;';
+      const sign=isNeg?'':'+';
+      const deficitWarn=isNeg?' ⚠ '+(t('carryDeficitWarn')||'Deficit i mbartur'):'';
+      cel.innerHTML=`<span style="font-size:11px;color:${color};">${arrow} ${t('carryOver')||'Bartur nga'} ${MONTHS[prevM]}: <strong style="font-family:DM Mono,monospace;">${sign}${fmt(carryOver)}</strong>${deficitWarn}</span>`;
     }else{cel.style.display='none';}
   }
   document.getElementById('m_income').textContent=fmt(totalIn);
@@ -2556,11 +2580,31 @@ function mobileNavClick(page, el){
     split:()=>{renderSplitList();renderSplitDebts();},
     reminders:()=>{renderReminders();checkReminders();},
     weekday:renderWeekday, pivot:renderPivot, dashboard:renderDashboard,
-    settings:()=>{renderSettings();renderAccentPicker();}
+    settings:()=>{renderSettings();renderAccentPicker();updateCarryDeficitToggle();}
   };
   if(renderMap[page]) renderMap[page]();
   // Scroll to top
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+
+// =============================================
+// CARRY-OVER DEFICIT TOGGLE
+// =============================================
+function toggleCarryDeficit(){
+  const current=localStorage.getItem('fm_carrydeficit')==='1';
+  localStorage.setItem('fm_carrydeficit',current?'0':'1');
+  updateCarryDeficitToggle();
+  render();
+}
+
+function updateCarryDeficitToggle(){
+  const btn=document.getElementById('carryDeficitToggle');
+  if(!btn)return;
+  const on=localStorage.getItem('fm_carrydeficit')==='1';
+  btn.style.background=on?'var(--accent)':'var(--border2)';
+  const knob=btn.querySelector('span');
+  if(knob)knob.style.left=on?'23px':'3px';
 }
 
 _initAccent();

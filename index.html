@@ -433,6 +433,7 @@ body.neon .btn:not(.btn-outline){color:#001a12;}
         <div class="panel-body">
           <div class="balance-bar"><div class="balance-fill" id="balFill" style="width:0%"></div></div>
           <div class="balance-labels"><span id="balLeft">Mbetje: €0</span><span id="balRight">Shpenzuar: €0</span></div>
+          <div id="carryOverDisplay" style="display:none;margin-top:6px;padding:6px 10px;background:var(--accent-dim);border-radius:var(--radius-sm);"></div>
           <div style="display:flex;gap:16px;margin-top:18px;align-items:flex-start;">
             <div style="flex:1;">
               <div class="metric-label" style="margin-bottom:9px;">Shpenzime sipas kategorisë</div>
@@ -1688,16 +1689,46 @@ function clearAllData(){if(!confirm(curLang==='de'?'WARNUNG: Alle Daten werden g
 // =============================================
 // MAIN RENDER
 // =============================================
+function getPrevMonthCarryOver(){
+  let pm=CM-1,py=CY;if(pm<0){pm=11;py--;}
+  try{
+    const pd=JSON.parse(localStorage.getItem(gk(py,pm))||'{"salary":0,"transactions":[]}');
+    const ptxs=pd.transactions||[],ps=pd.salary||0;
+    const pi=ptxs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0)+ps;
+    const pe=ptxs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    return Math.max(0,pi-pe);
+  }catch{return 0;}
+}
+
 function render(){
+  if(!document.getElementById('m_income')) return;
   const d=ld(),txs=d.transactions||[],salary=d.salary||0;
   document.getElementById('salaryDisplay').textContent=fmt(salary);
   const salLbl=document.getElementById('salaryMonthLbl');
   if(salLbl)salLbl.textContent=MONTHS[CM]+' '+CY;
   populateSalaryMonthSel();
-  const income=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0),expense=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0),totalIn=salary+income,savings=totalIn-expense;
-  const pct=totalIn>0?Math.min(100,Math.round((expense/totalIn)*100)):0,savePct=totalIn>0?Math.round((savings/totalIn)*100):0;
-  document.getElementById('m_income').textContent=fmt(totalIn);document.getElementById('m_expense').textContent=fmt(expense);document.getElementById('m_savings').textContent=fmt(savings);document.getElementById('m_savings').style.color=savings<0?'var(--red)':'var(--amber)';document.getElementById('m_savpct').textContent=savePct+'% '+t('income').toLowerCase();document.getElementById('m_count').textContent=txs.length;
-  document.getElementById('balFill').style.cssText=`width:${pct}%;background:${pct>80?'var(--red)':pct>60?'var(--amber)':'var(--accent)'};`;
+  const carryOver=getPrevMonthCarryOver();
+  const income=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+  const expense=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+  const totalIn=salary+income+carryOver;
+  const savings=totalIn-expense;
+  const pct=totalIn>0?Math.min(100,Math.round((expense/totalIn)*100)):0;
+  const savePct=totalIn>0?Math.round((savings/totalIn)*100):0;
+  // Carry-over display
+  const cel=document.getElementById('carryOverDisplay');
+  if(cel){
+    if(carryOver>0){
+      cel.style.display='flex';
+      const prevM=CM-1<0?11:CM-1;
+      cel.innerHTML=`<span style="font-size:11px;color:var(--accent);">&#8599; ${t('carryOver')||'Bartur nga'} ${MONTHS[prevM]}: <strong style="font-family:DM Mono,monospace;">+${fmt(carryOver)}</strong></span>`;
+    }else{cel.style.display='none';}
+  }
+  document.getElementById('m_income').textContent=fmt(totalIn);
+  document.getElementById('m_expense').textContent=fmt(expense);
+  {const _e=document.getElementById('m_savings');if(_e){_e.textContent=fmt(savings);_e.style.color=savings<0?'var(--red)':'var(--amber)';}}
+  document.getElementById('m_savpct').textContent=savePct+'% '+t('income').toLowerCase();
+  document.getElementById('m_count').textContent=txs.length;
+  {const _e=document.getElementById('balFill');if(_e)_e.style.cssText=`width:${pct}%;background:${pct>80?'var(--red)':pct>60?'var(--amber)':'var(--accent)'}`;}
   document.getElementById('balPctLbl').textContent=pct+'% '+t('spent');
   document.getElementById('balLeft').textContent=t('leftover')+': '+fmt(Math.max(0,savings));
   document.getElementById('balRight').textContent=t('spentOf')+': '+fmt(expense);
